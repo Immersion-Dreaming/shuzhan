@@ -9,6 +9,7 @@ import type {
   CompanionAction,
   CompanionPresentation,
 } from "./companion-presentation";
+import { shouldStartWindowDrag, type PointerPoint } from "./companion-drag";
 
 const compactSize = new LogicalSize(76, 76);
 const expandedSize = new LogicalSize(360, 210);
@@ -28,6 +29,8 @@ let presentation: CompanionPresentation | null = null;
 let manuallyExpanded = false;
 let compactAnchor: PhysicalPosition | null = null;
 let movingProgrammatically = false;
+let dragOrigin: PointerPoint | null = null;
+let suppressOrbClick = false;
 
 async function placeAtComfortableCorner() {
   const stored = localStorage.getItem("wellness-companion-position");
@@ -126,7 +129,35 @@ async function sendAction(action: CompanionAction) {
   await emitTo("main", "companion-command", action);
 }
 
-orb.addEventListener("click", () => {
+function armWindowDrag(event: PointerEvent) {
+  if (event.button !== 0 || (event.target as HTMLElement).closest("button:not(#orb)")) return;
+  dragOrigin = { x: event.clientX, y: event.clientY };
+}
+
+orb.addEventListener("pointerdown", armWindowDrag);
+card.addEventListener("pointerdown", armWindowDrag);
+
+window.addEventListener("pointermove", (event) => {
+  if (!dragOrigin || !shouldStartWindowDrag(dragOrigin, { x: event.clientX, y: event.clientY })) {
+    return;
+  }
+  suppressOrbClick = !companion.classList.contains("is-expanded");
+  dragOrigin = null;
+  void companionWindow.startDragging();
+});
+
+for (const eventName of ["pointerup", "pointercancel"] as const) {
+  window.addEventListener(eventName, () => {
+    dragOrigin = null;
+  });
+}
+
+orb.addEventListener("click", (event) => {
+  if (suppressOrbClick) {
+    suppressOrbClick = false;
+    event.preventDefault();
+    return;
+  }
   manuallyExpanded = true;
   if (presentation) void setExpanded(true);
 });

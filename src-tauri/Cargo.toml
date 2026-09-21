@@ -1,6 +1,6 @@
 [package]
 name = "app"
-version = "0.3.0"
+version = "0.3.1"
 description = "A gentle desktop reminder for eyes and movement during work sessions"
 authors = ["Shuzhan contributors"]
 license = ""
@@ -27,3 +27,6 @@ tauri-plugin-notification = "2"
 
 [target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
 tauri-plugin-single-instance = "2.4.5"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSWindow"] }

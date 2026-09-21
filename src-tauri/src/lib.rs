@@ -27,6 +27,21 @@ fn update_tray_status(app: tauri::AppHandle, title: Option<String>) {
     }
 }
 
+#[cfg(target_os = "macos")]
+fn allow_companion_in_fullscreen_spaces(window: &tauri::WebviewWindow) {
+    use objc2_app_kit::{NSWindow, NSWindowCollectionBehavior};
+
+    if let Ok(ns_window) = window.ns_window() {
+        unsafe {
+            let ns_window: &NSWindow = &*ns_window.cast();
+            let behavior = ns_window.collectionBehavior()
+                | NSWindowCollectionBehavior::CanJoinAllSpaces
+                | NSWindowCollectionBehavior::FullScreenAuxiliary;
+            ns_window.setCollectionBehavior(behavior);
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -40,6 +55,11 @@ pub fn run() {
             is_companion_visible
         ])
         .setup(|app| {
+            #[cfg(target_os = "macos")]
+            if let Some(companion) = app.get_webview_window("companion") {
+                allow_companion_in_fullscreen_spaces(&companion);
+            }
+
             if cfg!(debug_assertions) {
                 app.handle().plugin(
                     tauri_plugin_log::Builder::default()
