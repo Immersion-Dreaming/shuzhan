@@ -1,6 +1,6 @@
 [package]
 name = "app"
-version = "0.2.0"
+version = "0.3.0"
 description = "A gentle desktop reminder for eyes and movement during work sessions"
 authors = ["Shuzhan contributors"]
 license = ""
@@ -21,6 +21,9 @@ tauri-build = { version = "2.6.3", features = [] }
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 log = "0.4"
-tauri = { version = "2.11.6", features = ["tray-icon"] }
+tauri = { version = "2.11.6", features = ["macos-private-api", "tray-icon"] }
 tauri-plugin-log = "2"
 tauri-plugin-notification = "2"
+
+[target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
+tauri-plugin-single-instance = "2.4.5"

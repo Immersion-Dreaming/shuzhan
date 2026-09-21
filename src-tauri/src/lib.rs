@@ -4,12 +4,20 @@ use tauri::{
     Emitter, Manager,
 };
 
-fn show_main_window(app: &tauri::AppHandle) {
+#[tauri::command]
+fn show_main_window(app: tauri::AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.show();
         let _ = window.unminimize();
         let _ = window.set_focus();
     }
+}
+
+#[tauri::command]
+fn is_companion_visible(app: tauri::AppHandle) -> bool {
+    app.get_webview_window("companion")
+        .and_then(|window| window.is_visible().ok())
+        .unwrap_or(false)
 }
 
 #[tauri::command]
@@ -22,8 +30,15 @@ fn update_tray_status(app: tauri::AppHandle, title: Option<String>) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            show_main_window(app.clone());
+        }))
         .plugin(tauri_plugin_notification::init())
-        .invoke_handler(tauri::generate_handler![update_tray_status])
+        .invoke_handler(tauri::generate_handler![
+            update_tray_status,
+            show_main_window,
+            is_companion_visible
+        ])
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -37,9 +52,12 @@ pub fn run() {
             let toggle =
                 MenuItem::with_id(app, "toggle", "开始 / 暂停 / 继续", true, None::<&str>)?;
             let end = MenuItem::with_id(app, "end", "结束本次工作", true, None::<&str>)?;
+            let companion =
+                MenuItem::with_id(app, "companion", "显示 / 隐藏悬浮精灵", true, None::<&str>)?;
             let separator = PredefinedMenuItem::separator(app)?;
             let quit = MenuItem::with_id(app, "quit", "退出舒展", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&open, &toggle, &end, &separator, &quit])?;
+            let menu =
+                Menu::with_items(app, &[&open, &toggle, &end, &companion, &separator, &quit])?;
 
             let mut tray = TrayIconBuilder::with_id("main")
                 .menu(&menu)
@@ -51,12 +69,23 @@ pub fn run() {
             }
 
             tray.on_menu_event(|app, event| match event.id.as_ref() {
-                "open" => show_main_window(app),
+                "open" => show_main_window(app.clone()),
                 "toggle" => {
                     let _ = app.emit("tray-command", "toggle");
                 }
                 "end" => {
                     let _ = app.emit("tray-command", "end");
+                }
+                "companion" => {
+                    if let Some(window) = app.get_webview_window("companion") {
+                        if window.is_visible().unwrap_or(false) {
+                            let _ = window.hide();
+                            let _ = app.emit("companion-visibility", false);
+                        } else {
+                            let _ = window.show();
+                            let _ = app.emit("companion-visibility", true);
+                        }
+                    }
                 }
                 "quit" => app.exit(0),
                 _ => {}
@@ -79,7 +108,7 @@ pub fn run() {
                 ..
             } = event
             {
-                show_main_window(app);
+                show_main_window(app.clone());
             }
         });
 }

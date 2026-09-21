@@ -3,10 +3,17 @@
   "identifier": "default",
   "description": "enables the default permissions",
   "windows": [
-    "main"
+    "main",
+    "companion"
   ],
   "permissions": [
     "core:default",
+    "core:window:allow-current-monitor",
+    "core:window:allow-outer-position",
+    "core:window:allow-primary-monitor",
+    "core:window:allow-set-position",
+    "core:window:allow-set-size",
+    "core:window:allow-start-dragging",
     "notification:default"
   ]
 }

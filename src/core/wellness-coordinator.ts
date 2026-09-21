@@ -29,7 +29,18 @@ export type WellnessEvent =
   | { type: "system-wake"; at: number }
   | { type: "complete-reminder"; at: number }
   | { type: "snooze-reminder"; at: number }
+  | { type: "apply-settings"; at: number; settings: CoordinatorSettingsUpdate }
   | { type: "time-passed"; at: number };
+
+export type CoordinatorSettingsUpdate = {
+  blinkEnabled?: boolean;
+  exerciseEnabled?: boolean;
+  gazeIntervalMinutes?: number;
+  sedentaryIntervalMinutes?: number;
+  blinkMinimumMinutes?: number;
+  blinkMaximumMinutes?: number;
+  exerciseAfterMinutes?: number;
+};
 
 export type CoordinatorResult = {
   reminder: Reminder | null;
@@ -78,18 +89,18 @@ export type CoordinatorOptions = {
 };
 
 export function createWellnessCoordinator(options: CoordinatorOptions = {}): WellnessCoordinator {
-  const blinkEnabled = options.blinkEnabled ?? true;
-  const exerciseEnabled = options.exerciseEnabled ?? true;
+  let blinkEnabled = options.blinkEnabled ?? true;
+  let exerciseEnabled = options.exerciseEnabled ?? true;
   const random = options.random ?? Math.random;
-  const gazeIntervalMs = Math.max(1, options.gazeIntervalMinutes ?? 20) * 60_000;
-  const sedentaryIntervalMs = Math.max(1, options.sedentaryIntervalMinutes ?? 40) * 60_000;
-  const blinkMinimumMs = Math.max(1, options.blinkMinimumMinutes ?? 3) * 60_000;
-  const blinkMaximumMs = Math.max(
+  let gazeIntervalMs = Math.max(1, options.gazeIntervalMinutes ?? 20) * 60_000;
+  let sedentaryIntervalMs = Math.max(1, options.sedentaryIntervalMinutes ?? 40) * 60_000;
+  let blinkMinimumMs = Math.max(1, options.blinkMinimumMinutes ?? 3) * 60_000;
+  let blinkMaximumMs = Math.max(
     blinkMinimumMs,
     Math.max(1, options.blinkMaximumMinutes ?? 7) * 60_000,
   );
-  const blinkRangeMs = blinkMaximumMs - blinkMinimumMs;
-  const exerciseAfterMs = Math.max(1, options.exerciseAfterMinutes ?? 30) * 60_000;
+  let blinkRangeMs = blinkMaximumMs - blinkMinimumMs;
+  let exerciseAfterMs = Math.max(1, options.exerciseAfterMinutes ?? 30) * 60_000;
   const checkpoint = options.checkpoint;
   let status: SessionStatus = checkpoint
     ? checkpoint.status === "idle"
@@ -111,6 +122,28 @@ export function createWellnessCoordinator(options: CoordinatorOptions = {}): Wel
 
   function nextBlinkTarget() {
     return blinkMinimumMs + Math.floor(random() * blinkRangeMs);
+  }
+
+  function applySettings(update: CoordinatorSettingsUpdate) {
+    blinkEnabled = update.blinkEnabled ?? blinkEnabled;
+    exerciseEnabled = update.exerciseEnabled ?? exerciseEnabled;
+    gazeIntervalMs = Math.max(1, update.gazeIntervalMinutes ?? gazeIntervalMs / 60_000) * 60_000;
+    sedentaryIntervalMs =
+      Math.max(1, update.sedentaryIntervalMinutes ?? sedentaryIntervalMs / 60_000) * 60_000;
+    exerciseAfterMs =
+      Math.max(1, update.exerciseAfterMinutes ?? exerciseAfterMs / 60_000) * 60_000;
+
+    if (update.blinkMinimumMinutes !== undefined || update.blinkMaximumMinutes !== undefined) {
+      blinkMinimumMs =
+        Math.max(1, update.blinkMinimumMinutes ?? blinkMinimumMs / 60_000) * 60_000;
+      blinkMaximumMs =
+        Math.max(
+          blinkMinimumMs / 60_000,
+          update.blinkMaximumMinutes ?? blinkMaximumMs / 60_000,
+        ) * 60_000;
+      blinkRangeMs = blinkMaximumMs - blinkMinimumMs;
+      blinkTargetMs = nextBlinkTarget();
+    }
   }
 
   function periodAt(at: number): { key: string; period: WorkPeriod } | null {
@@ -192,6 +225,10 @@ export function createWellnessCoordinator(options: CoordinatorOptions = {}): Wel
 
       advanceTime(event.at);
 
+      if (event.type === "apply-settings") {
+        applySettings(event.settings);
+      }
+
       if (event.type === "pause-work") {
         status = "paused";
         return result(null);
@@ -215,6 +252,11 @@ export function createWellnessCoordinator(options: CoordinatorOptions = {}): Wel
 
       if (event.type === "end-work") {
         status = "idle";
+        sessionElapsedMs = 0;
+        gazeElapsedMs = 0;
+        sedentaryElapsedMs = 0;
+        blinkElapsedMs = 0;
+        blinkTargetMs = nextBlinkTarget();
         activeReminder = null;
         snoozedReminder = null;
         snoozedUntil = null;
@@ -234,10 +276,14 @@ export function createWellnessCoordinator(options: CoordinatorOptions = {}): Wel
         if (activeReminder?.kind === "gaze") {
           gazeElapsedMs = 0;
         } else if (activeReminder?.kind === "movement-break") {
+          status = "idle";
+          sessionElapsedMs = 0;
+          gazeElapsedMs = 0;
           sedentaryElapsedMs = 0;
-          if (activeReminder.includesGaze) {
-            gazeElapsedMs = 0;
-          }
+          blinkElapsedMs = 0;
+          blinkTargetMs = nextBlinkTarget();
+          snoozedReminder = null;
+          snoozedUntil = null;
         } else if (activeReminder?.kind === "blink") {
           blinkElapsedMs = 0;
           blinkTargetMs = nextBlinkTarget();

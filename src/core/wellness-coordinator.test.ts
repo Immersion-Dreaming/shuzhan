@@ -48,6 +48,27 @@ describe("wellness coordinator", () => {
     });
   });
 
+  it("ends and clears the work round when a movement break is completed", () => {
+    const coordinator = createWellnessCoordinator({ blinkEnabled: false, exerciseEnabled: false });
+
+    coordinator.dispatch({ type: "start-work", at: at(0) });
+    expect(coordinator.dispatch({ type: "time-passed", at: at(40) }).reminder?.kind).toBe(
+      "movement-break",
+    );
+
+    expect(coordinator.dispatch({ type: "complete-reminder", at: at(41) })).toMatchObject({
+      reminder: null,
+      snapshot: {
+        status: "idle",
+        sessionElapsedMs: 0,
+        gazeRemainingMs: at(20),
+        sedentaryRemainingMs: at(40),
+      },
+    });
+
+    expect(coordinator.dispatch({ type: "time-passed", at: at(90) }).reminder).toBeNull();
+  });
+
   it("shows a lightweight blink reminder at a randomized 3 to 7 minute interval", () => {
     const coordinator = createWellnessCoordinator({ random: () => 0, exerciseEnabled: false });
 
@@ -115,7 +136,12 @@ describe("wellness coordinator", () => {
 
     expect(coordinator.dispatch({ type: "time-passed", at: at(60) })).toMatchObject({
       reminder: null,
-      snapshot: { status: "idle" },
+      snapshot: {
+        status: "idle",
+        sessionElapsedMs: 0,
+        gazeRemainingMs: at(20),
+        sedentaryRemainingMs: at(40),
+      },
     });
   });
 
@@ -133,6 +159,46 @@ describe("wellness coordinator", () => {
     expect(coordinator.dispatch({ type: "time-passed", at: at(2) }).reminder?.kind).toBe(
       "movement-break",
     );
+  });
+
+  it("applies changed reminder intervals to the current work round", () => {
+    const coordinator = createWellnessCoordinator({
+      blinkEnabled: false,
+      exerciseEnabled: false,
+      gazeIntervalMinutes: 20,
+      sedentaryIntervalMinutes: 40,
+    });
+
+    coordinator.dispatch({ type: "start-work", at: at(0) });
+    coordinator.dispatch({ type: "time-passed", at: at(5) });
+
+    expect(
+      coordinator.dispatch({
+        type: "apply-settings",
+        at: at(5),
+        settings: { gazeIntervalMinutes: 30, sedentaryIntervalMinutes: 60 },
+      }).snapshot,
+    ).toMatchObject({
+      gazeRemainingMs: at(25),
+      sedentaryRemainingMs: at(55),
+    });
+
+    const overdue = createWellnessCoordinator({
+      blinkEnabled: false,
+      exerciseEnabled: false,
+      gazeIntervalMinutes: 20,
+      sedentaryIntervalMinutes: 40,
+    });
+    overdue.dispatch({ type: "start-work", at: at(0) });
+    overdue.dispatch({ type: "time-passed", at: at(15) });
+
+    expect(
+      overdue.dispatch({
+        type: "apply-settings",
+        at: at(15),
+        settings: { gazeIntervalMinutes: 10 },
+      }).reminder?.kind,
+    ).toBe("gaze");
   });
 
   it("does not count time spent asleep after the computer wakes", () => {

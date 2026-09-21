@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>舒展精灵</title>
+  </head>
+  <body>
+    <main class="companion companion--idle" id="companion">
+      <button class="orb" id="orb" aria-label="展开舒展精灵">
+        <span class="leaf" aria-hidden="true" data-tauri-drag-region></span>
+        <span class="face" aria-hidden="true"><i></i><i></i><b></b></span>
+        <span class="status-glow" aria-hidden="true"></span>
+      </button>
+
+      <section class="companion-card hidden" id="companion-card" aria-live="polite">
+        <div class="drag-strip" data-tauri-drag-region>
+          <span></span><span></span><span></span>
+        </div>
+        <button class="close-card" id="close-card" aria-label="收起">×</button>
+        <div class="card-mascot" aria-hidden="true" data-tauri-drag-region>
+          <span class="leaf"></span>
+          <span class="face"><i></i><i></i><b></b></span>
+        </div>
+        <div class="card-copy">
+          <span class="eyebrow" id="companion-eyebrow">舒展一下</span>
+          <h1 id="companion-title">准备好时再开始</h1>
+          <p id="companion-detail">我会安静地陪你安排眨眼、远眺和活动。</p>
+        </div>
+        <div class="card-actions" id="companion-actions">
+          <button class="primary-action" id="companion-primary">开始工作</button>
+          <button class="secondary-action" id="companion-secondary">打开主界面</button>
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="/src/companion.ts"></script>
+  </body>
+</html>

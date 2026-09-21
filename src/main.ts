@@ -1,7 +1,7 @@
 import "./styles.css";
 
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { emitTo, listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   isPermissionGranted,
@@ -16,7 +16,12 @@ import {
   type CoordinatorResult,
   type Reminder,
 } from "./core/wellness-coordinator";
+import {
+  createCompanionPresentation,
+  type CompanionAction,
+} from "./companion-presentation";
 import { chooseReminderPresentation, type ReminderPresentation } from "./notification-policy";
+import { createSessionPresentation } from "./session-presentation";
 
 type DailyStats = {
   date: string;
@@ -113,6 +118,7 @@ const reminderEyebrow = $("#reminder-eyebrow");
 const reminderTitle = $("#reminder-title");
 const reminderDescription = $("#reminder-description");
 const exerciseSteps = $("#exercise-steps");
+const completeButton = $("#complete-button") as HTMLButtonElement;
 const settingsDialog = $("#settings-dialog") as HTMLDialogElement;
 
 function persistCheckpoint(result: CoordinatorResult) {
@@ -125,13 +131,14 @@ function persistCheckpoint(result: CoordinatorResult) {
 
 function updateTrayStatus(result: CoordinatorResult) {
   if (!isTauri()) return;
-  const title =
-    result.snapshot.status === "working"
-      ? `舒 ${Math.max(1, Math.ceil(result.snapshot.gazeRemainingMs / 60_000))}m`
-      : result.snapshot.status === "paused"
-        ? "舒 暂停"
-        : "舒";
-  void invoke("update_tray_status", { title });
+  void invoke("update_tray_status", {
+    title: createSessionPresentation(result.snapshot).trayTitle,
+  });
+}
+
+function publishCompanionState(result: CoordinatorResult) {
+  if (!isTauri()) return;
+  void emitTo("companion", "companion-state", createCompanionPresentation(result));
 }
 
 function formatDuration(milliseconds: number, includeSeconds = false) {
@@ -150,6 +157,7 @@ function render(result: CoordinatorResult) {
   currentResult = result;
   persistCheckpoint(result);
   updateTrayStatus(result);
+  publishCompanionState(result);
   const { snapshot } = result;
   const working = snapshot.status === "working";
   const paused = snapshot.status === "paused";
@@ -158,7 +166,7 @@ function render(result: CoordinatorResult) {
   statusDot.className = `status-dot ${working ? "active" : paused ? "paused" : ""}`;
   sessionTime.textContent = formatDuration(snapshot.sessionElapsedMs, true);
   sessionCaption.textContent = working
-    ? "可以关闭这个窗口，我会继续在菜单栏后台提醒你。"
+    ? "可以关闭主窗口，舒展精灵会继续陪你提醒。"
     : paused
       ? restoredSession
         ? "已恢复上次工作进度，离线时间没有计入。"
@@ -181,7 +189,7 @@ function reminderCopy(reminder: Reminder) {
   if (reminder.kind === "movement-break") {
     return {
       symbol: "↟",
-      eyebrow: "已经连续工作 40 分钟",
+      eyebrow: `已经连续工作 ${settings.sedentaryIntervalMinutes} 分钟`,
       title: "起来走走吧",
       description: reminder.includesGaze
         ? "离开座位活动 2–5 分钟，同时看看远处。这次完成后会同时重置久坐和远眺计时。"
@@ -194,6 +202,28 @@ function reminderCopy(reminder: Reminder) {
 async function presentReminder(reminder: Reminder | null) {
   if (!reminder || shownReminder) return;
   shownReminder = reminder;
+
+  if (isTauri()) {
+    const companionVisible = await invoke<boolean>("is_companion_visible");
+    if (!companionVisible) {
+      const presentation = chooseReminderPresentation(reminder, false);
+      deliverSystemNotification(presentation);
+      if (reminder.kind !== "blink") {
+        const repeatAfterMs = reminder.kind === "movement-break" ? 5 * 60_000 : 8 * 60_000;
+        reminderEscalationTimer = window.setTimeout(() => {
+          if (shownReminder === reminder) deliverSystemNotification(presentation);
+        }, repeatAfterMs);
+      }
+    }
+    if (reminder.kind === "blink") {
+      blinkTimer = window.setTimeout(
+        () => completeReminder(false),
+        reminder.autoDismissSeconds * 1000,
+      );
+    }
+    return;
+  }
+
   const windowFocused = isTauri()
     ? await getCurrentWindow().isFocused()
     : document.hasFocus() && document.visibilityState === "visible";
@@ -216,6 +246,8 @@ async function presentReminder(reminder: Reminder | null) {
   reminderTitle.textContent = copy.title;
   reminderDescription.textContent = copy.description;
   exerciseSteps.classList.toggle("hidden", reminder.kind !== "micro-exercise");
+  completeButton.textContent =
+    reminder.kind === "movement-break" ? "我起来了，结束本轮" : "完成了";
   reminderBackdrop.classList.remove("hidden");
   if (presentation.surface === "system") {
     deliverSystemNotification(presentation);
@@ -349,7 +381,7 @@ $("#settings-form").addEventListener("submit", (event) => {
   };
   localStorage.setItem("wellness-settings", JSON.stringify(settings));
   settingsDialog.close();
-  render(currentResult);
+  render(coordinator.dispatch({ type: "apply-settings", at: Date.now(), settings }));
 });
 
 $("#test-notification").addEventListener("click", async () => {
@@ -383,6 +415,25 @@ if (isTauri()) {
       else startOrResumeWork();
     }
     if (payload === "end") endWork();
+  });
+  void listen<CompanionAction>("companion-command", ({ payload }) => {
+    if (payload === "start-work" || payload === "resume-work") startOrResumeWork();
+    if (payload === "pause-work") pauseWork();
+    if (payload === "complete-reminder") completeReminder(true);
+    if (payload === "snooze-reminder") {
+      hideReminder();
+      render(coordinator.dispatch({ type: "snooze-reminder", at: Date.now() }));
+    }
+    if (payload === "open-main") {
+      const mainWindow = getCurrentWindow();
+      void mainWindow.show().then(() => mainWindow.setFocus());
+    }
+  });
+  void listen("companion-ready", () => publishCompanionState(currentResult));
+  void listen<boolean>("companion-visibility", ({ payload }) => {
+    if (!payload && shownReminder) {
+      deliverSystemNotification(chooseReminderPresentation(shownReminder, false));
+    }
   });
 }
 

@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "舒展",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "identifier": "com.shuzhan.wellness",
   "build": {
     "frontendDist": "../dist",
@@ -10,6 +10,7 @@
     "beforeBuildCommand": "pnpm run build"
   },
   "app": {
+    "macOSPrivateApi": true,
     "windows": [
       {
         "title": "舒展 · 工作健康提醒",
@@ -20,6 +21,23 @@
         "backgroundThrottling": "disabled",
         "resizable": true,
         "fullscreen": false
+      },
+      {
+        "label": "companion",
+        "title": "舒展精灵",
+        "url": "companion.html",
+        "width": 76,
+        "height": 76,
+        "minWidth": 76,
+        "minHeight": 76,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "resizable": false,
+        "shadow": false,
+        "focus": false,
+        "visible": true
       }
     ],
     "security": {
