@@ -12,6 +12,22 @@ button { font: inherit; }
 .companion { width: 100%; height: 100%; display: flex; align-items: flex-end; justify-content: flex-end; padding: 7px; }
 .companion.is-expanded { align-items: stretch; padding: 8px; }
 
+.blink-hint {
+  align-self: center;
+  min-width: 158px;
+  margin: 0 9px 0 3px;
+  padding: 10px 14px 10px 16px;
+  border: 1px solid rgba(255,255,255,.82);
+  border-radius: 18px;
+  background: rgba(248,250,246,.94);
+  box-shadow: 0 10px 28px rgba(38,67,52,.16);
+  backdrop-filter: blur(16px) saturate(1.05);
+  animation: hint-in .32s cubic-bezier(.2,.8,.2,1);
+}
+.blink-hint strong, .blink-hint span { display: block; white-space: nowrap; }
+.blink-hint strong { color: #315844; font-size: 13px; font-weight: 760; letter-spacing: .01em; }
+.blink-hint span { margin-top: 2px; color: #7a8980; font-size: 10px; }
+
 .orb {
   position: relative;
   width: 62px;
@@ -42,7 +58,16 @@ button { font: inherit; }
 
 .companion--working .status-glow { background: #4b9c70; box-shadow: 0 0 0 4px rgba(75,156,112,.14); }
 .companion--paused .status-glow { background: #d0a35d; }
-.companion--blink .face i { height: 2px; border-radius: 50%; transform: translateY(3px); animation: blink 1.15s ease-in-out infinite; }
+.companion--blink .orb::before {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border: 2px solid rgba(91,157,118,.42);
+  border-radius: 26px;
+  pointer-events: none;
+  animation: blink-halo 2.3s ease-out 2;
+}
+.companion--blink .face i { transform-origin: center; animation: slow-blink 1.15s ease-in-out 3; }
 .companion--gaze .orb,
 .companion--gaze .card-mascot { background: linear-gradient(145deg, #e4eee6, #c9dcce); }
 .companion--exercise .orb,
@@ -83,9 +108,19 @@ button { font: inherit; }
 .secondary-action:hover { background: #d8e4d7; }
 
 @keyframes open-card { from { opacity: 0; transform: translateY(8px) scale(.97); } }
-@keyframes blink { 0%, 52%, 100% { transform: translateY(3px) scaleX(1); } 65% { transform: translateY(3px) scaleX(.55); } }
+@keyframes slow-blink {
+  0%, 18%, 78%, 100% { height: 7px; transform: translateY(0) scaleX(1); }
+  42%, 60% { height: 2px; transform: translateY(3px) scaleX(1.3); }
+}
+@keyframes blink-halo {
+  0% { opacity: 0; transform: scale(.92); }
+  28% { opacity: 1; }
+  100% { opacity: 0; transform: scale(1.24); }
+}
+@keyframes hint-in { from { opacity: 0; transform: translateX(8px) scale(.97); } }
 @keyframes attentive { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+  .companion--blink .orb::before { opacity: 1; transform: none; }
 }

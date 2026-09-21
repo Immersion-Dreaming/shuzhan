@@ -21,6 +21,8 @@ export type CompanionMode =
 export type CompanionPresentation = {
   mode: CompanionMode;
   expanded: boolean;
+  attentionCue?: "gentle-blink";
+  hintLabel?: string;
   eyebrow: string;
   title: string;
   detail: string;
@@ -87,6 +89,8 @@ export function createCompanionPresentation({
     return {
       mode: "blink",
       expanded: false,
+      attentionCue: "gentle-blink",
+      hintLabel: "慢慢眨眼 5 次",
       eyebrow: "轻提醒",
       title: "慢慢眨眼几次",
       detail: "完整眨眼 5 次，放松眼周。",

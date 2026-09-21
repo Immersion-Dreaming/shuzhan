@@ -9,9 +9,15 @@ import type {
   CompanionAction,
   CompanionPresentation,
 } from "./companion-presentation";
-import { shouldStartWindowDrag, type PointerPoint } from "./companion-drag";
+import {
+  compactAnchorAfterMove,
+  shouldStartWindowDrag,
+  type CompanionWindowMode,
+  type PointerPoint,
+} from "./companion-drag";
 
 const compactSize = new LogicalSize(76, 76);
+const blinkCueSize = new LogicalSize(250, 76);
 const expandedSize = new LogicalSize(360, 210);
 const companionWindow = getCurrentWindow();
 
@@ -24,6 +30,7 @@ const title = document.querySelector<HTMLElement>("#companion-title")!;
 const detail = document.querySelector<HTMLElement>("#companion-detail")!;
 const primary = document.querySelector<HTMLButtonElement>("#companion-primary")!;
 const secondary = document.querySelector<HTMLButtonElement>("#companion-secondary")!;
+const blinkHint = document.querySelector<HTMLElement>("#blink-hint")!;
 
 let presentation: CompanionPresentation | null = null;
 let manuallyExpanded = false;
@@ -31,6 +38,7 @@ let compactAnchor: PhysicalPosition | null = null;
 let movingProgrammatically = false;
 let dragOrigin: PointerPoint | null = null;
 let suppressOrbClick = false;
+let windowMode: CompanionWindowMode = "compact";
 
 async function placeAtComfortableCorner() {
   const stored = localStorage.getItem("wellness-companion-position");
@@ -57,35 +65,37 @@ async function placeAtComfortableCorner() {
   await companionWindow.setPosition(compactAnchor);
 }
 
-async function setExpanded(expanded: boolean) {
-  const wasExpanded = companion.classList.contains("is-expanded");
-  if (expanded === wasExpanded) return;
+async function setWindowMode(mode: CompanionWindowMode) {
+  if (mode === windowMode) return;
   movingProgrammatically = true;
-  if (expanded) compactAnchor = await companionWindow.outerPosition();
+  if (windowMode === "compact") compactAnchor = await companionWindow.outerPosition();
+  const expanded = mode === "expanded";
   companion.classList.toggle("is-expanded", expanded);
   card.classList.toggle("hidden", !expanded);
   orb.classList.toggle("hidden", expanded);
-  await companionWindow.setSize(expanded ? expandedSize : compactSize);
+  blinkHint.classList.toggle("hidden", mode !== "blink");
+  const targetSize = expanded ? expandedSize : mode === "blink" ? blinkCueSize : compactSize;
+  await companionWindow.setSize(targetSize);
   if (compactAnchor) {
-    if (expanded) {
+    if (mode !== "compact") {
       const monitor = (await currentMonitor()) ?? (await primaryMonitor());
       const scaleFactor = monitor?.scaleFactor ?? 1;
-      const expandedWidth = Math.round(expandedSize.width * scaleFactor);
-      const expandedHeight = Math.round(expandedSize.height * scaleFactor);
+      const targetWidth = Math.round(targetSize.width * scaleFactor);
+      const targetHeight = Math.round(targetSize.height * scaleFactor);
       const desiredX =
-        compactAnchor.x - Math.round((expandedSize.width - compactSize.width) * scaleFactor);
+        compactAnchor.x - Math.round((targetSize.width - compactSize.width) * scaleFactor);
       const desiredY =
-        compactAnchor.y - Math.round((expandedSize.height - compactSize.height) * scaleFactor);
+        compactAnchor.y - Math.round((targetSize.height - compactSize.height) * scaleFactor);
       const x = monitor
         ? Math.min(
             Math.max(desiredX, monitor.workArea.position.x),
-            monitor.workArea.position.x + monitor.workArea.size.width - expandedWidth,
+            monitor.workArea.position.x + monitor.workArea.size.width - targetWidth,
           )
         : desiredX;
       const y = monitor
         ? Math.min(
             Math.max(desiredY, monitor.workArea.position.y),
-            monitor.workArea.position.y + monitor.workArea.size.height - expandedHeight,
+            monitor.workArea.position.y + monitor.workArea.size.height - targetHeight,
           )
         : desiredY;
       await companionWindow.setPosition(
@@ -95,6 +105,7 @@ async function setExpanded(expanded: boolean) {
       await companionWindow.setPosition(compactAnchor);
     }
   }
+  windowMode = mode;
   movingProgrammatically = false;
 }
 
@@ -116,13 +127,20 @@ async function render(next: CompanionPresentation) {
   closeCard.setAttribute("aria-label", next.expanded ? "稍后提醒" : "收起");
   bindAction(primary, next.primaryAction, next.primaryLabel);
   bindAction(secondary, next.secondaryAction, next.secondaryLabel);
-  await setExpanded(next.expanded || manuallyExpanded);
+  const nextWindowMode =
+    next.expanded || manuallyExpanded
+      ? "expanded"
+      : next.attentionCue === "gentle-blink"
+        ? "blink"
+        : "compact";
+  blinkHint.querySelector("strong")!.textContent = next.hintLabel ?? "";
+  await setWindowMode(nextWindowMode);
 }
 
 async function sendAction(action: CompanionAction) {
   manuallyExpanded = false;
   if (action === "open-main") {
-    await setExpanded(false);
+    await setWindowMode("compact");
     await invoke("show_main_window");
     return;
   }
@@ -159,7 +177,7 @@ orb.addEventListener("click", (event) => {
     return;
   }
   manuallyExpanded = true;
-  if (presentation) void setExpanded(true);
+  if (presentation) void setWindowMode("expanded");
 });
 
 closeCard.addEventListener("click", () => {
@@ -168,7 +186,7 @@ closeCard.addEventListener("click", () => {
     return;
   }
   manuallyExpanded = false;
-  void setExpanded(presentation?.expanded ?? false);
+  void setWindowMode(presentation?.attentionCue === "gentle-blink" ? "blink" : "compact");
 });
 
 for (const button of [primary, secondary]) {
@@ -182,12 +200,14 @@ void listen<CompanionPresentation>("companion-state", ({ payload }) => {
   void render(payload);
 });
 
-void companionWindow.onMoved(({ payload }) => {
+void companionWindow.onMoved(async ({ payload }) => {
   if (movingProgrammatically || companion.classList.contains("is-expanded")) return;
-  compactAnchor = payload;
+  const monitor = (await currentMonitor()) ?? (await primaryMonitor());
+  const anchor = compactAnchorAfterMove(payload, windowMode, monitor?.scaleFactor ?? 1);
+  compactAnchor = new PhysicalPosition(anchor.x, anchor.y);
   localStorage.setItem(
     "wellness-companion-position",
-    JSON.stringify({ x: payload.x, y: payload.y }),
+    JSON.stringify({ x: anchor.x, y: anchor.y }),
   );
 });
 

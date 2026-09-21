@@ -394,6 +394,20 @@ $("#test-notification").addEventListener("click", async () => {
   });
 });
 
+$("#preview-blink").addEventListener("click", () => {
+  const preview = createCompanionPresentation({
+    snapshot: currentResult.snapshot,
+    reminder: { kind: "blink", autoDismissSeconds: 5 },
+  });
+  if (isTauri()) {
+    void emitTo("companion", "companion-state", preview);
+    window.setTimeout(() => publishCompanionState(currentResult), 5_000);
+    return;
+  }
+  blinkToast.classList.remove("hidden");
+  window.setTimeout(() => blinkToast.classList.add("hidden"), 5_000);
+});
+
 let lastHeartbeatAt = Date.now();
 
 window.setInterval(() => {

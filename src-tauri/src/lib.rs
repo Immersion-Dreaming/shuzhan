@@ -4,6 +4,18 @@ use tauri::{
     Emitter, Manager,
 };
 
+#[cfg(target_os = "macos")]
+tauri_nspanel::tauri_panel! {
+    panel!(CompanionPanel {
+        config: {
+            can_become_key_window: false,
+            can_become_main_window: false,
+            becomes_key_only_if_needed: true,
+            is_floating_panel: true
+        }
+    })
+}
+
 #[tauri::command]
 fn show_main_window(app: tauri::AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
@@ -28,18 +40,36 @@ fn update_tray_status(app: tauri::AppHandle, title: Option<String>) {
 }
 
 #[cfg(target_os = "macos")]
-fn allow_companion_in_fullscreen_spaces(window: &tauri::WebviewWindow) {
-    use objc2_app_kit::{NSWindow, NSWindowCollectionBehavior};
+fn companion_collection_behavior() -> tauri_nspanel::objc2_app_kit::NSWindowCollectionBehavior {
+    use tauri_nspanel::objc2_app_kit::NSWindowCollectionBehavior;
 
-    if let Ok(ns_window) = window.ns_window() {
-        unsafe {
-            let ns_window: &NSWindow = &*ns_window.cast();
-            let behavior = ns_window.collectionBehavior()
-                | NSWindowCollectionBehavior::CanJoinAllSpaces
-                | NSWindowCollectionBehavior::FullScreenAuxiliary;
-            ns_window.setCollectionBehavior(behavior);
-        }
-    }
+    NSWindowCollectionBehavior::CanJoinAllSpaces
+        | NSWindowCollectionBehavior::CanJoinAllApplications
+        | NSWindowCollectionBehavior::FullScreenAuxiliary
+        | NSWindowCollectionBehavior::Stationary
+        | NSWindowCollectionBehavior::IgnoresCycle
+}
+
+#[cfg(target_os = "macos")]
+fn companion_window_level() -> i64 {
+    tauri_nspanel::PanelLevel::ScreenSaver.value()
+}
+
+#[cfg(target_os = "macos")]
+fn configure_companion_panel(window: &tauri::WebviewWindow) -> tauri::Result<()> {
+    use tauri_nspanel::{objc2_app_kit::NSWindowStyleMask, WebviewWindowExt};
+
+    let panel = window.to_panel::<CompanionPanel>()?;
+    panel.set_floating_panel(true);
+    panel.set_hides_on_deactivate(false);
+    panel.set_released_when_closed(false);
+    panel.set_level(companion_window_level());
+    panel.set_collection_behavior(companion_collection_behavior());
+    panel
+        .add_style_mask(NSWindowStyleMask::NonactivatingPanel)
+        .map_err(|error| tauri::Error::Anyhow(error.into()))?;
+    panel.order_front_regardless();
+    Ok(())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -48,6 +78,7 @@ pub fn run() {
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             show_main_window(app.clone());
         }))
+        .plugin(tauri_nspanel::init())
         .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![
             update_tray_status,
@@ -56,8 +87,12 @@ pub fn run() {
         ])
         .setup(|app| {
             #[cfg(target_os = "macos")]
-            if let Some(companion) = app.get_webview_window("companion") {
-                allow_companion_in_fullscreen_spaces(&companion);
+            {
+                app.handle()
+                    .set_activation_policy(tauri::ActivationPolicy::Accessory)?;
+                if let Some(companion) = app.get_webview_window("companion") {
+                    configure_companion_panel(&companion)?;
+                }
             }
 
             if cfg!(debug_assertions) {
@@ -131,4 +166,21 @@ pub fn run() {
                 show_main_window(app.clone());
             }
         });
+}
+
+#[cfg(all(test, target_os = "macos"))]
+mod tests {
+    use super::*;
+    use tauri_nspanel::objc2_app_kit::NSWindowCollectionBehavior;
+
+    #[test]
+    fn companion_panel_policy_spans_other_apps_fullscreen_spaces() {
+        let behavior = companion_collection_behavior();
+
+        assert!(behavior.contains(NSWindowCollectionBehavior::CanJoinAllSpaces));
+        assert!(behavior.contains(NSWindowCollectionBehavior::CanJoinAllApplications));
+        assert!(behavior.contains(NSWindowCollectionBehavior::FullScreenAuxiliary));
+        assert!(behavior.contains(NSWindowCollectionBehavior::Stationary));
+        assert_eq!(companion_window_level(), 1000);
+    }
 }

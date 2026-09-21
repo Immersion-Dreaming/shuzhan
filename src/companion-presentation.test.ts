@@ -44,4 +44,24 @@ describe("floating companion presentation", () => {
       primaryAction: "start-work",
     });
   });
+
+  it("turns a blink reminder into a visible but non-blocking cue", () => {
+    expect(
+      createCompanionPresentation({
+        snapshot: {
+          status: "working",
+          sessionElapsedMs: 5 * minute,
+          gazeRemainingMs: 15 * minute,
+          sedentaryRemainingMs: 35 * minute,
+        },
+        reminder: { kind: "blink", autoDismissSeconds: 5 },
+      }),
+    ).toMatchObject({
+      mode: "blink",
+      expanded: false,
+      attentionCue: "gentle-blink",
+      hintLabel: "慢慢眨眼 5 次",
+      primaryAction: null,
+    });
+  });
 });
