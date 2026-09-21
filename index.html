@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f4f1ea" />
+    <title>舒展 · 工作健康提醒</title>
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">舒</span>
+          <div>
+            <strong>舒展</strong>
+            <span>工作健康提醒</span>
+          </div>
+        </div>
+        <button class="icon-button" id="settings-button" aria-label="打开设置">⚙</button>
+      </header>
+
+      <main>
+        <section class="hero-card" aria-labelledby="session-heading">
+          <div class="status-line">
+            <span class="status-dot" id="status-dot"></span>
+            <span id="status-label">尚未开始工作</span>
+          </div>
+          <h1 id="session-heading">把专注留给工作，<br />把休息交给我。</h1>
+          <div class="session-time" id="session-time" aria-live="polite">00:00:00</div>
+          <p class="session-caption" id="session-caption">开始后，将按你的节奏提醒远眺、眨眼和活动。</p>
+          <div class="primary-actions">
+            <button class="primary-button" id="start-button">开始工作</button>
+            <button class="secondary-button hidden" id="pause-button">暂停</button>
+            <button class="text-button hidden" id="end-button">结束本次工作</button>
+          </div>
+        </section>
+
+        <section class="rhythm-grid" aria-label="提醒进度">
+          <article class="rhythm-card gaze-card">
+            <div class="card-icon">◉</div>
+            <div>
+              <span class="eyebrow">眼睛休息</span>
+              <strong id="gaze-countdown">20 分钟后</strong>
+              <p>看向远处 20 秒</p>
+            </div>
+          </article>
+          <article class="rhythm-card movement-card">
+            <div class="card-icon">↟</div>
+            <div>
+              <span class="eyebrow">起身走动</span>
+              <strong id="movement-countdown">40 分钟后</strong>
+              <p>离开座位活动 2–5 分钟</p>
+            </div>
+          </article>
+        </section>
+
+        <section class="today-card" aria-labelledby="today-heading">
+          <div class="section-heading">
+            <div>
+              <span class="eyebrow">今日记录</span>
+              <h2 id="today-heading">每一次活动都算数</h2>
+            </div>
+            <span class="date-label" id="date-label"></span>
+          </div>
+          <div class="stats-grid">
+            <div><strong id="gaze-stat">0</strong><span>次远眺</span></div>
+            <div><strong id="movement-stat">0</strong><span>次走动</span></div>
+            <div><strong id="exercise-stat">0</strong><span>次微运动</span></div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div class="blink-toast hidden" id="blink-toast" role="status">
+      <span class="blink-eye">◡</span>
+      <div><strong>慢慢眨眼几次</strong><span>放松眼周，完整眨眼 5 次</span></div>
+    </div>
+
+    <div class="reminder-backdrop hidden" id="reminder-backdrop">
+      <section class="reminder-panel" role="dialog" aria-modal="true" aria-labelledby="reminder-title">
+        <span class="reminder-symbol" id="reminder-symbol">◉</span>
+        <span class="eyebrow" id="reminder-eyebrow">该休息了</span>
+        <h2 id="reminder-title">看看远处</h2>
+        <p id="reminder-description"></p>
+        <div class="exercise-steps hidden" id="exercise-steps">
+          <span>踮脚或提踵 15–20 次</span>
+          <span>稍作放松</span>
+          <span>按自己的情况进行一组提肛练习</span>
+        </div>
+        <div class="reminder-actions">
+          <button class="primary-button" id="complete-button">完成了</button>
+          <button class="secondary-button" id="snooze-button">5 分钟后提醒</button>
+        </div>
+      </section>
+    </div>
+
+    <dialog class="settings-dialog" id="settings-dialog">
+      <form method="dialog" id="settings-form">
+        <div class="dialog-heading">
+          <div><span class="eyebrow">偏好设置</span><h2>调整你的节奏</h2></div>
+          <button class="icon-button" value="cancel" aria-label="关闭">×</button>
+        </div>
+        <div class="settings-fields">
+          <label>远眺间隔 <span><input id="gaze-setting" type="number" min="5" max="90" /> 分钟</span></label>
+          <label>久坐间隔 <span><input id="sedentary-setting" type="number" min="20" max="180" /> 分钟</span></label>
+          <label>眨眼最短间隔 <span><input id="blink-min-setting" type="number" min="1" max="30" /> 分钟</span></label>
+          <label>眨眼最长间隔 <span><input id="blink-max-setting" type="number" min="1" max="30" /> 分钟</span></label>
+          <label>微运动前累计工作 <span><input id="exercise-setting" type="number" min="10" max="120" /> 分钟</span></label>
+          <label class="toggle-row">启用眨眼轻提醒 <input id="blink-enabled-setting" type="checkbox" /></label>
+          <label class="toggle-row">启用早中晚微运动 <input id="exercise-enabled-setting" type="checkbox" /></label>
+        </div>
+        <p class="settings-note" id="settings-note">设置将在下一次开始工作时生效。</p>
+        <button class="secondary-button full-width" type="button" id="test-notification">
+          测试系统通知
+        </button>
+        <button class="primary-button full-width" value="default" id="save-settings">保存设置</button>
+      </form>
+    </dialog>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
